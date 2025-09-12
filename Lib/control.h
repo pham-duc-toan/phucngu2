@@ -1,4 +1,11 @@
-#ifndef CONTROL_H
+#ifndef COuint8_t Control_GetLineDetected(void);  // Kiểm tra có line hợp lệ không
+uint8_t Control_GetLineColor(void);               // Lấy màu line hiện tại
+void Control_SetRequiredLineColor(uint8_t color); // Đặt màu line yêu cầu (BLACK/RED)
+
+// Debug function
+void Control_DebugInfo(void); // Debug function để kiểm tra trạng thái
+
+#endif_H
 #define CONTROL_H
 #include "board.h"
 

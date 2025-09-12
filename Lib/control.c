@@ -23,6 +23,11 @@ static uint8_t required_line_color = LINE_BLACK | LINE_RED; // Mặc định: ch
 static uint8_t line_detected = 0;
 static uint32_t lost_valid_line_time = 0;
 
+/* Debug variables - để kiểm tra trong debugger */
+static SensorDebug_t debug_info;
+static uint16_t debug_snap[N_CH];
+static uint32_t debug_counter = 0;
+
 void Control_SetMotorTestMode(uint8_t enable)
 {
   motor_test_mode = enable;
@@ -48,6 +53,23 @@ void Control_SetRequiredLineColor(uint8_t color)
   required_line_color = color;
 }
 
+/* DEBUG FUNCTION - gọi từ debugger để kiểm tra trạng thái */
+void Control_DebugInfo(void)
+{
+  // Đặt breakpoint ở đây và check các biến:
+  // debug_info.raw_values[0..7] - giá trị ADC của 8 sensors
+  // debug_info.avg_all - trung bình tất cả sensors
+  // debug_info.contrast - độ tương phản
+  // debug_info.active_sensors - số sensors active
+  // debug_info.detected_color - màu được detect (0=NONE, 1=BLACK, 2=RED)
+  // debug_info.is_valid - có line hợp lệ không
+  // current_line_color - màu hiện tại
+  // line_detected - có line được detect không
+  // Button_RunEnabled() - robot có được enable không
+  // c1_tg, c2_tg - target PWM values
+  volatile int dummy = 0; // Để compiler không optimize
+}
+
 void Control_Init(void)
 {
   PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
@@ -66,6 +88,12 @@ void Control_Loop_1kHz(void)
   uint16_t snap[N_CH];
   for (int i = 0; i < N_CH; i++)
     snap[i] = adcBuf[i];
+
+  /* DEBUG: Copy data cho debug */
+  debug_counter++;
+  for (int i = 0; i < N_CH; i++)
+    debug_snap[i] = snap[i];
+  debug_info = LineSensors_GetDebugInfo(snap);
 
   /* Phát hiện màu line và kiểm tra tính hợp lệ */
   current_line_color = LineSensors_DetectLineColor(snap);
@@ -89,6 +117,7 @@ void Control_Loop_1kHz(void)
   if (!Button_RunEnabled())
   {
     c1_tg = c2_tg = 0;
+    c1_now = c2_now = 0; // Force current về 0
     lost_valid_line_time = 0;
     /* Reset PID khi dừng */
     PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
@@ -106,7 +135,8 @@ void Control_Loop_1kHz(void)
       lost_valid_line_time++;
 
       /* Dừng robot ngay lập tức nếu không có line hợp lệ */
-      c1_tg = c2_tg = 0; // Dừng hoàn toàn
+      c1_tg = c2_tg = 0;   // Dừng hoàn toàn
+      c1_now = c2_now = 0; // Force cả current về 0 để bypass slew rate
 
       /* Disable run nếu mất line hợp lệ quá lâu */
       if (lost_valid_line_time > 2000) // 2 giây
@@ -117,6 +147,9 @@ void Control_Loop_1kHz(void)
 
       /* Reset PID */
       PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
+
+      /* Force write PWM 0 để đảm bảo motor dừng */
+      Motor_WritePWM_Calibrated(0, 0);
       return;
     }
 
@@ -218,6 +251,12 @@ void Control_Loop_1kHz(void)
   if (d2 < -(int)CCR_SLEW_CURRENT)
     d2 = -(int)CCR_SLEW_CURRENT;
   c2_now = (uint16_t)((int)c2_now + d2);
+
+  /* SAFETY CHECK CUỐI CÙNG: Force stop nếu không có line hợp lệ */
+  if (!Button_RunEnabled() || (!line_detected && !motor_test_mode))
+  {
+    c1_now = c2_now = 0;
+  }
 
   Motor_WritePWM_Calibrated(c1_now, c2_now); // Sử dụng PWM có hiệu chuẩn
 }
