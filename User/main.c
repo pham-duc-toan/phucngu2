@@ -22,8 +22,8 @@ int main(void)
   LineSensors_CalibInit();
   Control_Init();
 
-  /* CẤU HÌNH ROBOT CHỈ CHẠY VỚI LINE ĐEN HOẶC ĐỎ */
-  Control_SetRequiredLineColor(LINE_BLACK | LINE_RED); // Chấp nhận cả đen và đỏ
+  /* CẤU HÌNH ROBOT CHỈ CHẠY VỚI LINE ĐEN */
+  Control_SetRequiredLineColor(LINE_BLACK); // CHỈ CHẤP NHẬN LINE ĐEN THÔI
 
   /* CHẾ ĐỘ TEST MOTOR: Nhấn giữ nút trong 3 giây khi khởi động */
   uint32_t start_time = 0;
@@ -46,17 +46,20 @@ int main(void)
   /* VÒNG LẶP CHÍNH: KIỂM TRA LINE HỢP LỆ TRƯỚC KHI CHO PHÉP START */
   while (1)
   {
+    /* DEBUG: Gọi debug function để có thể check trong debugger */
+    Control_DebugInfo();  // Đặt breakpoint ở đây để check sensor values
+    
     /* Chỉ cho phép start khi:
        1. Nhấn button PB13
-       2. Phát hiện line đen hoặc đỏ */
+       2. Phát hiện line đen THÔI */
     if (BTN_IS_PRESSED() && !Button_RunEnabled())
     {
       // Đợi 100ms để sensor ổn định trước khi kiểm tra
       for (volatile int i = 0; i < 100000; i++)
         ;
 
-      // Kiểm tra có line hợp lệ không
-      if (Control_GetLineDetected())
+      // Kiểm tra có line đen không
+      if (Control_GetLineDetected() && Control_GetLineColor() == LINE_BLACK)
       {
         Button_SetRunEnabled(1); // Cho phép chạy
 
@@ -73,7 +76,7 @@ int main(void)
       }
       else
       {
-        // Không có line hợp lệ - delay ngắn rồi thử lại
+        // Không có line đen - delay ngắn rồi thử lại
         for (volatile int i = 0; i < 50000; i++)
           ;
         while (BTN_IS_PRESSED())

@@ -100,6 +100,11 @@ void Control_Loop_1kHz(void)
   line_detected = LineSensors_HasValidLine(snap) &&
                   ((current_line_color & required_line_color) != 0);
 
+  /* SAFETY OVERRIDE: Nếu không phải line đen thì FORCE STOP ngay */
+  if (current_line_color != LINE_BLACK) {
+    line_detected = 0;  // Force không detect
+  }
+
   /* ~8s đầu tự hiệu chuẩn - tăng thời gian để hiệu chuẩn tốt hơn */
   static uint32_t t = 0;
   static uint8_t calib_done = 0;
