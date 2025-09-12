@@ -8,11 +8,11 @@
 #define LINE_RED 2
 #define LINE_WHITE 3
 
-// Threshold phát hiện line - NGHIÊM NGẶT CHỈ CHO LINE ĐEN
-#define LINE_DETECTION_THRESHOLD 500 // Tăng threshold để chỉ detect line rõ ràng
-#define COLOR_BLACK_THRESHOLD 600    // ADC < 600: chỉ line đen thật sự
-#define COLOR_RED_THRESHOLD 1500     // 600 ≤ ADC < 1500: line đỏ
-#define COLOR_WHITE_THRESHOLD 2500   // ADC ≥ 1500: line trắng/nền
+// Threshold phát hiện line - RELAX HƠN ĐỂ DEBUG
+#define LINE_DETECTION_THRESHOLD 200 // Giảm để dễ detect line
+#define COLOR_BLACK_THRESHOLD 1000   // ADC < 1000: line đen (relax hơn)
+#define COLOR_RED_THRESHOLD 2000     // 1000 ≤ ADC < 2000: line đỏ
+#define COLOR_WHITE_THRESHOLD 3000   // ADC ≥ 2000: line trắng/nền
 
 // Debug function để kiểm tra sensors
 typedef struct

@@ -97,14 +97,16 @@ void Control_Loop_1kHz(void)
 
   /* Phát hiện màu line và kiểm tra tính hợp lệ */
   current_line_color = LineSensors_DetectLineColor(snap);
-  line_detected = LineSensors_HasValidLine(snap) &&
-                  ((current_line_color & required_line_color) != 0);
+  // TEMP SIMPLE cho debug - chỉ cần có line là chạy
+  line_detected = LineSensors_HasValidLine(snap);
+  // Original: line_detected = LineSensors_HasValidLine(snap) && ((current_line_color & required_line_color) != 0);
 
   /* SAFETY OVERRIDE: Nếu không phải line đen thì FORCE STOP ngay */
-  if (current_line_color != LINE_BLACK)
+  // TEMP DISABLE cho debug
+  /*if (current_line_color != LINE_BLACK)
   {
     line_detected = 0; // Force không detect
-  }
+  }*/
 
   /* ULTIMATE SAFETY: HARD CHECK cho giấy trắng */
   uint32_t avg_all = 0;
@@ -114,8 +116,8 @@ void Control_Loop_1kHz(void)
   }
   avg_all /= N_CH;
 
-  // Nếu trung bình sensors > 2000 (giấy trắng) thì FORCE STOP
-  if (avg_all > 2000)
+  // CHỈ force stop nếu THỰC SỰ là giấy trắng (tất cả sensors đều cao)
+  if (avg_all > 3000) // Tăng threshold từ 2000 lên 3000
   {
     line_detected = 0;
     current_line_color = LINE_NONE;
@@ -280,17 +282,19 @@ void Control_Loop_1kHz(void)
   }
 
   /* MEGA KILL SWITCH: HARD STOP nếu không phải line đen */
-  if (current_line_color != LINE_BLACK)
+  // TEMP DISABLE cho debug
+  /*if (current_line_color != LINE_BLACK)
   {
     c1_now = c2_now = 0;
-  }
+  }*/
 
   /* ULTIMATE KILL SWITCH: HARD STOP nếu ở test mode nhưng không có line */
-  if (motor_test_mode && current_line_color != LINE_BLACK)
+  // TEMP DISABLE cho debug
+  /*if (motor_test_mode && current_line_color != LINE_BLACK)
   {
     c1_now = c2_now = 0;
     motor_test_mode = 0; // Disable test mode
-  }
+  }*/
   {
     c1_now = c2_now = 0;
   }

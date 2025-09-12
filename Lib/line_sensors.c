@@ -128,8 +128,20 @@ uint8_t LineSensors_DetectLineColor(const uint16_t *snap)
 /* Kiểm tra có line hợp lệ (đen hoặc đỏ) không */
 uint8_t LineSensors_HasValidLine(const uint16_t *snap)
 {
-  uint8_t color = LineSensors_DetectLineColor(snap);
-  return (color == LINE_BLACK || color == LINE_RED);
+  // TEMP RELAX cho debug - chỉ cần có sự khác biệt là OK
+  uint16_t min_val = 4095, max_val = 0;
+  for (int i = 0; i < 8; i++)
+  {
+    if (snap[i] < min_val)
+      min_val = snap[i];
+    if (snap[i] > max_val)
+      max_val = snap[i];
+  }
+
+  // Nếu có sự khác biệt đủ lớn thì coi như có line
+  return (max_val - min_val) > 100; // Threshold thấp cho debug
+
+  // Original: uint8_t color = LineSensors_DetectLineColor(snap); return (color == LINE_BLACK || color == LINE_RED);
 }
 
 /* Compute error nâng cao với color detection */

@@ -63,8 +63,8 @@ int main(void)
       for (volatile int i = 0; i < 100000; i++)
         ;
 
-      // Kiểm tra có line đen không
-      if (Control_GetLineDetected() && Control_GetLineColor() == LINE_BLACK)
+      // Kiểm tra có line đen không - RELAX CHO DEBUG
+      if (Control_GetLineDetected()) // Tạm thời chỉ check detected, không check color
       {
         Button_SetRunEnabled(1); // Cho phép chạy
 
