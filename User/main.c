@@ -47,8 +47,8 @@ int main(void)
   while (1)
   {
     /* DEBUG: Gọi debug function để có thể check trong debugger */
-    Control_DebugInfo();  // Đặt breakpoint ở đây để check sensor values
-    
+    Control_DebugInfo(); // Đặt breakpoint ở đây để check sensor values
+
     /* Chỉ cho phép start khi:
        1. Nhấn button PB13
        2. Phát hiện line đen THÔI */

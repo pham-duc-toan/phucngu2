@@ -101,8 +101,9 @@ void Control_Loop_1kHz(void)
                   ((current_line_color & required_line_color) != 0);
 
   /* SAFETY OVERRIDE: Nếu không phải line đen thì FORCE STOP ngay */
-  if (current_line_color != LINE_BLACK) {
-    line_detected = 0;  // Force không detect
+  if (current_line_color != LINE_BLACK)
+  {
+    line_detected = 0; // Force không detect
   }
 
   /* ~8s đầu tự hiệu chuẩn - tăng thời gian để hiệu chuẩn tốt hơn */
