@@ -1,17 +1,15 @@
 #ifndef CONTROL_H
 #define CONTROL_H
 #include "board.h"
-#include "line_sensors.h" // Cần để biết LINE_BLACK, LINE_RED, etc.
+#include "line_sensors.h"
 
 void Control_Init(void);
 void Control_Loop_1kHz(void);
 void Control_SetMotorTestMode(uint8_t enable); // Bật/tắt chế độ test motor
 void Control_SetHighSpeedMode(uint8_t enable); // Bật/tắt chế độ tốc độ cao
 
-// Thêm các function mới
-uint8_t Control_GetLineDetected(void);            // Kiểm tra có line hợp lệ không
-uint8_t Control_GetLineColor(void);               // Lấy màu line hiện tại
-void Control_SetRequiredLineColor(uint8_t color); // Đặt màu line yêu cầu (BLACK/RED)
+// Simple line detection function
+uint8_t Control_GetLineDetected(void); // Kiểm tra có line hợp lệ không
 
 // Debug function
 void Control_DebugInfo(void); // Debug function để kiểm tra trạng thái
