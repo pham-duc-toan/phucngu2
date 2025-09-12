@@ -25,16 +25,16 @@ void LineSensors_UpdateCalib(const uint16_t *snap)
   }
 }
 
-/* Ki?m tra ch?t l??ng hi?u chu?n - tr? v? 1 n?u t?t, 0 n?u ch?a t?t */
+/* Kiểm tra chất lượng hiệu chuẩn - trả về 1 nếu tốt, 0 nếu chưa tốt */
 int LineSensors_CalibQuality(void)
 {
   int good_channels = 0;
   for (int i = 0; i < N_CH; i++)
   {
     if ((s_max[i] - s_min[i]) > MIN_CALIB_DIFF_PARAM) // Sử dụng tham số từ file
-      good_channels++;                                // Ng??ng ch?nh l?ch t?i thi?u
+      good_channels++;                                // Ngưỡng chênh lệch tối thiểu
   }
-  return (good_channels >= (N_CH - 2)); // Ch?p nh?n n?u ?t nh?t 6/8 sensor t?t
+  return (good_channels >= (N_CH - 2)); // Chấp nhận nếu ít nhất 6/8 sensor tốt
 }
 
 /* Sử dụng tham số từ file line_params.h để dễ tuning */
@@ -136,7 +136,6 @@ int LineSensors_ComputeError(const uint16_t *snap)
     // *** THAY ĐỔI: NGHIÊM KHẮC HƠN - KHÔNG TÌM LINE KHI KHÔNG CÓ ***
     lostLineCounter++;
 
-    // CHỈ cho phép tìm line trong thời gian rất ngắn
     // CHỈ cho phép tìm line trong thời gian rất ngắn
     if (lostLineCounter < LOST_LINE_TIME_MS_PARAM) // Sử dụng tham số từ file
     {

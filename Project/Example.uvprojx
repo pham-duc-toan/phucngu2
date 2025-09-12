@@ -454,6 +454,11 @@
               <FilePath>..\Lib\line_sensors.h</FilePath>
             </File>
             <File>
+              <FileName>line_params.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Lib\line_params.h</FilePath>
+            </File>
+            <File>
               <FileName>button.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Lib\button.c</FilePath>
