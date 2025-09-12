@@ -1,0 +1,26 @@
+# Keil uVision generated files
+**/Objects/
+**/Listings/
+**/DebugConfig/
+**/*.uvguix*
+**/*.axf
+**/*.hex
+**/*.bin
+**/*.elf
+**/*.map
+**/*.htm
+**/*.lnp
+**/*.bak
+**/*.dep
+**/*.o
+**/*.d
+**/*.crf
+**/*.lst
+
+# Build logs
+**/*.build_log.htm
+
+# Temporary files
+**/*~
+**/Thumbs.db
+**/.DS_Store
