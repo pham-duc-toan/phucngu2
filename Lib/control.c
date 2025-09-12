@@ -6,101 +6,217 @@
 #include "button.h"
 
 static PID_t pid = {
-  .Kp=1.5f, .Ki=0.05f, .Kd=0.08f, .Ts=1.0f/CONTROL_HZ,
-  .I=0, .D=0, .last_e=0, .d_alpha=0.85f, .u_min=-1500.0f, .u_max=1500.0f
-};
+    .Kp = 1.5f, .Ki = 0.05f, .Kd = 0.08f, .Ts = 1.0f / CONTROL_HZ, .I = 0, .D = 0, .last_e = 0, .d_alpha = 0.85f, .u_min = -1500.0f, .u_max = 1500.0f};
 
 /* Slew-rate limiter cho PWM (counts/ms) */
 static const uint16_t CCR_SLEW_MAX = 80;
-static uint16_t c1_now=0, c2_now=0, c1_tg=0, c2_tg=0;
+static uint16_t c1_now = 0, c2_now = 0, c1_tg = 0, c2_tg = 0;
 
 /* Ch? ?? test motor */
 static uint8_t motor_test_mode = 0;
 /* Ch? ?? t?c ?? cao - có th? b?t/t?t */
-static uint8_t high_speed_mode = 1;  // M?c ??nh b?t t?c ?? cao
+static uint8_t high_speed_mode = 1; // M?c ??nh b?t t?c ?? cao
 
-void Control_SetMotorTestMode(uint8_t enable){
+/* Biến theo dõi line color */
+static uint8_t current_line_color = LINE_NONE;
+static uint8_t required_line_color = LINE_BLACK | LINE_RED; // Mặc định: chấp nhận cả đen và đỏ
+static uint8_t line_detected = 0;
+static uint32_t lost_valid_line_time = 0;
+
+void Control_SetMotorTestMode(uint8_t enable)
+{
   motor_test_mode = enable;
 }
 
-void Control_SetHighSpeedMode(uint8_t enable){
+void Control_SetHighSpeedMode(uint8_t enable)
+{
   high_speed_mode = enable;
 }
 
-void Control_Init(void){
+uint8_t Control_GetLineDetected(void)
+{
+  return line_detected;
+}
+
+uint8_t Control_GetLineColor(void)
+{
+  return current_line_color;
+}
+
+void Control_SetRequiredLineColor(uint8_t color)
+{
+  required_line_color = color;
+}
+
+void Control_Init(void)
+{
   PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
   LineSensors_CalibInit();
   Motor_SetForward();
-  
+
   /* HI?U CHU?N MOTOR - ?I?U CH?NH C�C H? S? N�Y ?? C�N B?NG 2 B�NH */
   /* N?u bánh tr�i nhanh h?n: gi?m left_factor
      N?u bánh ph?i nhanh h?n: gi?m right_factor */
-  Motor_SetCalibration(1.0f, 1.0f);  // B?t ??u v?i 1.0 (kh?ng hi?u chu?n)
+  Motor_SetCalibration(1.0f, 1.0f); // B?t ??u v?i 1.0 (kh?ng hi?u chu?n)
 }
 
-void Control_Loop_1kHz(void){
+void Control_Loop_1kHz(void)
+{
   /* Snapshot ADC */
   uint16_t snap[N_CH];
-  for(int i=0;i<N_CH;i++) snap[i]=adcBuf[i];
+  for (int i = 0; i < N_CH; i++)
+    snap[i] = adcBuf[i];
 
-  /* ~8s d?u t? hi?u chu?n - t?ng th?i gian ?? hi?u chu?n t?t h?n */
-  static uint32_t t=0;
+  /* Phát hiện màu line và kiểm tra tính hợp lệ */
+  current_line_color = LineSensors_DetectLineColor(snap);
+  line_detected = LineSensors_HasValidLine(snap) &&
+                  ((current_line_color & required_line_color) != 0);
+
+  /* ~8s đầu tự hiệu chuẩn - tăng thời gian để hiệu chuẩn tốt hơn */
+  static uint32_t t = 0;
   static uint8_t calib_done = 0;
-  
-  if(t<8000 && !calib_done) {
+
+  if (t < 8000 && !calib_done)
+  {
     LineSensors_UpdateCalib(snap);
-    if(t > 3000 && LineSensors_CalibQuality()) {
-      calib_done = 1;  // Hi?u chu?n s?m n?u ch?t l??ng ?? t?t
+    if (t > 3000 && LineSensors_CalibQuality())
+    {
+      calib_done = 1; // Hiệu chuẩn sớm nếu chất lượng đủ tốt
     }
   }
   t++;
 
-  if(!Button_RunEnabled()){
-    c1_tg=c2_tg=0;
-    /* Reset PID khi d?ng */
+  if (!Button_RunEnabled())
+  {
+    c1_tg = c2_tg = 0;
+    lost_valid_line_time = 0;
+    /* Reset PID khi dừng */
     PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
-  }else if(motor_test_mode){
-    /* CH? ?? TEST MOTOR - ch?y th?ng v?i t?c ?? cao ?? ki?m tra c�n b?ng */
-    c1_tg = c2_tg = 3000;  // T?ng t? 1500 l�n 3000 (~75% max)
-  }else{
-    int e = LineSensors_ComputeError(snap);
+  }
+  else if (motor_test_mode)
+  {
+    /* CHẾ ĐỘ TEST MOTOR - chạy thẳng với tốc độ cao để kiểm tra cân bằng */
+    c1_tg = c2_tg = 3000; // Tăng từ 1500 lên 3000 (~75% max)
+  }
+  else
+  {
+    /* KIỂM TRA LINE HỢP LỆ TRƯỚC KHI CHẠY */
+    if (!line_detected)
+    {
+      lost_valid_line_time++;
+
+      /* Dừng robot nếu mất line hợp lệ quá lâu */
+      if (lost_valid_line_time > 1000)
+      {                    // 1 giây
+        c1_tg = c2_tg = 0; // Dừng hoàn toàn
+        /* Reset PID */
+        PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
+        return;
+      }
+
+      /* Trong 1 giây đầu: thử tìm lại line với tốc độ thấp */
+      c1_tg = c2_tg = 800; // Tốc độ rất thấp để tìm kiếm
+      return;
+    }
+
+    /* Reset counter khi tìm thấy line hợp lệ */
+    lost_valid_line_time = 0;
+
+    /* SỬ DỤNG ADVANCED ERROR COMPUTATION */
+    int e = LineSensors_ComputeErrorAdvanced(snap);
+
+    /* Dừng nếu error = 0 (mất line hoàn toàn) */
+    if (e == 0)
+    {
+      c1_tg = c2_tg = 0;
+      return;
+    }
+
     float u = PID_Update(&pid, (float)e);
 
-    /* BASE ?i?u ch?nh linh ho?t theo l?i - T?NG T?C ?? L�N G?N MAX */
-    int BASE, LOW_SPEED, MED_SPEED, HIGH_SPEED;
-    
-    if(high_speed_mode) {
-      // Ch? ?? t?c ?? cao
-      BASE = 3200; HIGH_SPEED = 3600; MED_SPEED = 2800; LOW_SPEED = 2400;
-    } else {
-      // Ch? ?? t?c ?? b?nh th??ng
-      BASE = 1600; HIGH_SPEED = 1800; MED_SPEED = 1400; LOW_SPEED = 1200;
+    /* BASE điều chỉnh linh hoạt theo lỗi - TĂNG TỐC ĐỘ LÊN GẦN MAX */
+    int BASE, LOW_SPEED, MED_SPEED, HIGH_SPEED, ULTRA_HIGH_SPEED;
+
+    if (high_speed_mode)
+    {
+      // Chế độ tốc độ cao - tối ưu cho line tracking
+      BASE = 3400;
+      ULTRA_HIGH_SPEED = 3800;
+      HIGH_SPEED = 3600;
+      MED_SPEED = 3000;
+      LOW_SPEED = 2400;
     }
-    
+    else
+    {
+      // Chế độ tốc độ bình thường
+      BASE = 1800;
+      ULTRA_HIGH_SPEED = 2000;
+      HIGH_SPEED = 1800;
+      MED_SPEED = 1400;
+      LOW_SPEED = 1200;
+    }
+
     int abs_e = (e >= 0) ? e : -e;
-    
-    if (abs_e > 1800) {
-        BASE = LOW_SPEED;   // T?c ?? th?p khi l?i l?n (cua g?t)
-    } else if (abs_e > 1200) {
-        BASE = MED_SPEED;   // T?c ?? trung b?nh
-    } else if (abs_e < 300) {
-        BASE = HIGH_SPEED;  // T?c ?? cao khi ?? ch?nh x?c
+
+    /* Adaptive speed với nhiều mức độ chi tiết hơn */
+    if (abs_e > 2000)
+    {
+      BASE = LOW_SPEED; // Cua rất gắt
+    }
+    else if (abs_e > 1500)
+    {
+      BASE = MED_SPEED; // Cua gắt
+    }
+    else if (abs_e > 800)
+    {
+      BASE = HIGH_SPEED; // Cua nhẹ
+    }
+    else if (abs_e < 200)
+    {
+      BASE = ULTRA_HIGH_SPEED; // Đường thẳng hoàn hảo
+    }
+    else
+    {
+      BASE = HIGH_SPEED; // Gần như thẳng
+    }
+
+    /* Boost thêm tốc độ cho line màu đen vì dễ detect hơn */
+    if (current_line_color == LINE_BLACK && abs_e < 500)
+    {
+      BASE = (int)(BASE * 1.05f); // Tăng 5% cho black line
     }
 
     int L = BASE - (int)u;
     int R = BASE + (int)u;
 
-    if(L<0)L=0; if(L>(int)TIM4->ARR)L=TIM4->ARR;
-    if(R<0)R=0; if(R>(int)TIM4->ARR)R=TIM4->ARR;
+    if (L < 0)
+      L = 0;
+    if (L > (int)TIM4->ARR)
+      L = TIM4->ARR;
+    if (R < 0)
+      R = 0;
+    if (R > (int)TIM4->ARR)
+      R = TIM4->ARR;
 
     Motor_SetForward();
-    c1_tg=(uint16_t)L; c2_tg=(uint16_t)R;
+    c1_tg = (uint16_t)L;
+    c2_tg = (uint16_t)R;
   }
 
-  /* Slew-rate v? target - ?i?u ch?nh cho t?c ?? cao */
-  uint16_t CCR_SLEW_CURRENT = 100;  // T?ng t? 60 l�n 100 cho thay ??i nhanh h?n
-  int d1=(int)c1_tg-(int)c1_now; if(d1> (int)CCR_SLEW_CURRENT)d1= CCR_SLEW_CURRENT; if(d1<-(int)CCR_SLEW_CURRENT)d1=-(int)CCR_SLEW_CURRENT; c1_now=(uint16_t)((int)c1_now+d1);
-  int d2=(int)c2_tg-(int)c2_now; if(d2> (int)CCR_SLEW_CURRENT)d2= CCR_SLEW_CURRENT; if(d2<-(int)CCR_SLEW_CURRENT)d2=-(int)CCR_SLEW_CURRENT; c2_now=(uint16_t)((int)c2_now+d2);
+  /* Slew-rate về target - điều chỉnh cho tốc độ cao */
+  uint16_t CCR_SLEW_CURRENT = 120; // Tăng từ 100 lên 120 cho response nhanh hơn
+  int d1 = (int)c1_tg - (int)c1_now;
+  if (d1 > (int)CCR_SLEW_CURRENT)
+    d1 = CCR_SLEW_CURRENT;
+  if (d1 < -(int)CCR_SLEW_CURRENT)
+    d1 = -(int)CCR_SLEW_CURRENT;
+  c1_now = (uint16_t)((int)c1_now + d1);
+  int d2 = (int)c2_tg - (int)c2_now;
+  if (d2 > (int)CCR_SLEW_CURRENT)
+    d2 = CCR_SLEW_CURRENT;
+  if (d2 < -(int)CCR_SLEW_CURRENT)
+    d2 = -(int)CCR_SLEW_CURRENT;
+  c2_now = (uint16_t)((int)c2_now + d2);
 
-  Motor_WritePWM_Calibrated(c1_now, c2_now);  // S? d?ng PWM có hi?u chu?n
+  Motor_WritePWM_Calibrated(c1_now, c2_now); // Sử dụng PWM có hiệu chuẩn
 }
