@@ -51,6 +51,10 @@ int main(void)
        2. Phát hiện line đen hoặc đỏ */
     if (BTN_IS_PRESSED() && !Button_RunEnabled())
     {
+      // Đợi 100ms để sensor ổn định trước khi kiểm tra
+      for (volatile int i = 0; i < 100000; i++)
+        ;
+
       // Kiểm tra có line hợp lệ không
       if (Control_GetLineDetected())
       {
@@ -80,7 +84,7 @@ int main(void)
       }
     }
 
-    /* Dừng khi nhấn button lần nữa */
+    /* Dừng khi nhấn button lần nữa HOẶC robot tự động dừng do mất line */
     if (BTN_IS_PRESSED() && Button_RunEnabled())
     {
       Button_SetRunEnabled(0); // Dừng

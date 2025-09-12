@@ -51,43 +51,73 @@ uint8_t LineSensors_DetectLineColor(const uint16_t *snap)
   uint32_t max_value = 0;
   uint8_t active_sensors = 0;
 
-  // Tính trung bình các sensor active và tìm min/max
+  // Tính trung bình tất cả sensors và tìm min/max
   for (int i = 0; i < N_CH; i++)
   {
     uint16_t raw = snap[i];
+    avg_value += raw;
 
     if (raw > max_value)
       max_value = raw;
     if (raw < min_value)
       min_value = raw;
+  }
 
-    // Sensor active nếu có sự khác biệt đáng kể so với background
-    if ((s_max[i] - raw) > LINE_DETECTION_THRESHOLD)
+  avg_value /= N_CH; // Trung bình tất cả sensors
+
+  // Kiểm tra contrast để đảm bảo có line
+  uint32_t contrast = max_value - min_value;
+  if (contrast < LINE_DETECTION_THRESHOLD)
+  {
+    return LINE_NONE; // Không đủ contrast để phát hiện line
+  }
+
+  // Đếm số sensors phát hiện line (giá trị thấp hơn trung bình đáng kể)
+  for (int i = 0; i < N_CH; i++)
+  {
+    if (snap[i] < (avg_value - 200)) // Sensor thấp hơn trung bình 200 ADC units
     {
-      avg_value += raw;
       active_sensors++;
     }
   }
 
-  // Kiểm tra contrast để đảm bảo có line
-  uint32_t contrast = max_value - min_value;
-  if (contrast < LINE_DETECTION_THRESHOLD || active_sensors == 0)
+  // Phải có ít nhất 1 sensor active mới coi là có line
+  if (active_sensors == 0)
   {
     return LINE_NONE;
   }
 
-  avg_value /= active_sensors;
+  // Tính trung bình của các sensors active (có line)
+  uint32_t line_avg = 0;
+  uint8_t line_sensor_count = 0;
+  for (int i = 0; i < N_CH; i++)
+  {
+    if (snap[i] < (avg_value - 200))
+    {
+      line_avg += snap[i];
+      line_sensor_count++;
+    }
+  }
 
-  // Phân loại màu dựa trên giá trị ADC trung bình
-  if (avg_value < COLOR_BLACK_THRESHOLD)
+  if (line_sensor_count > 0)
+  {
+    line_avg /= line_sensor_count;
+  }
+  else
+  {
+    return LINE_NONE;
+  }
+
+  // Phân loại màu dựa trên giá trị ADC trung bình của line
+  if (line_avg < COLOR_BLACK_THRESHOLD)
   {
     return LINE_BLACK; // Line đen: phản xạ ít ánh sáng
   }
-  else if (avg_value < COLOR_RED_THRESHOLD)
+  else if (line_avg < COLOR_RED_THRESHOLD)
   {
     return LINE_RED; // Line đỏ: phản xạ trung bình
   }
-  else if (avg_value < COLOR_WHITE_THRESHOLD)
+  else if (line_avg < COLOR_WHITE_THRESHOLD)
   {
     return LINE_WHITE; // Line trắng: phản xạ nhiều ánh sáng
   }
@@ -180,6 +210,51 @@ int LineSensors_ComputeErrorAdvanced(const uint16_t *snap)
 
   // Fallback to old behavior
   return LineSensors_ComputeError(snap);
+}
+
+/* Debug function để kiểm tra sensor values */
+SensorDebug_t LineSensors_GetDebugInfo(const uint16_t *snap)
+{
+  SensorDebug_t debug = {0};
+
+  // Copy raw values
+  for (int i = 0; i < N_CH; i++)
+  {
+    debug.raw_values[i] = snap[i];
+  }
+
+  // Calculate stats
+  uint32_t sum = 0;
+  debug.min_val = 4095;
+  debug.max_val = 0;
+
+  for (int i = 0; i < N_CH; i++)
+  {
+    sum += snap[i];
+    if (snap[i] < debug.min_val)
+      debug.min_val = snap[i];
+    if (snap[i] > debug.max_val)
+      debug.max_val = snap[i];
+  }
+
+  debug.avg_all = sum / N_CH;
+  debug.contrast = debug.max_val - debug.min_val;
+
+  // Count active sensors
+  debug.active_sensors = 0;
+  for (int i = 0; i < N_CH; i++)
+  {
+    if (snap[i] < (debug.avg_all - 200))
+    {
+      debug.active_sensors++;
+    }
+  }
+
+  // Get color and validity
+  debug.detected_color = LineSensors_DetectLineColor(snap);
+  debug.is_valid = LineSensors_HasValidLine(snap);
+
+  return debug;
 }
 
 int LineSensors_ComputeError(const uint16_t *snap)

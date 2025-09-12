@@ -105,17 +105,18 @@ void Control_Loop_1kHz(void)
     {
       lost_valid_line_time++;
 
-      /* Dừng robot nếu mất line hợp lệ quá lâu */
-      if (lost_valid_line_time > 1000)
-      {                    // 1 giây
-        c1_tg = c2_tg = 0; // Dừng hoàn toàn
-        /* Reset PID */
-        PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
-        return;
+      /* Dừng robot ngay lập tức nếu không có line hợp lệ */
+      c1_tg = c2_tg = 0; // Dừng hoàn toàn
+
+      /* Disable run nếu mất line hợp lệ quá lâu */
+      if (lost_valid_line_time > 2000) // 2 giây
+      {
+        Button_SetRunEnabled(0); // Tự động disable để bắt buộc user nhấn button lại
+        lost_valid_line_time = 0;
       }
 
-      /* Trong 1 giây đầu: thử tìm lại line với tốc độ thấp */
-      c1_tg = c2_tg = 800; // Tốc độ rất thấp để tìm kiếm
+      /* Reset PID */
+      PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
       return;
     }
 
