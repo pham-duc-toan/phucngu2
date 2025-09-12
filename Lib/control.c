@@ -22,6 +22,7 @@ static uint8_t high_speed_mode = 1; // Mặc định bật tốc độ cao
 static SensorDebug_t debug_info;
 static uint16_t debug_snap[N_CH];
 static uint32_t debug_counter = 0;
+static uint8_t line_detected = 0; // Trạng thái phát hiện line
 
 void Control_SetMotorTestMode(uint8_t enable)
 {
