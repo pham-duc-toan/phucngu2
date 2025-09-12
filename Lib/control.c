@@ -19,7 +19,7 @@ static uint8_t high_speed_mode = 1; // M?c ??nh b?t t?c ?? cao
 
 /* Biến theo dõi line color */
 static uint8_t current_line_color = LINE_NONE;
-static uint8_t required_line_color = LINE_BLACK | LINE_RED; // Mặc định: chấp nhận cả đen và đỏ
+static uint8_t required_line_color = LINE_BLACK; // FORCE CHỈ LINE ĐEN
 static uint8_t line_detected = 0;
 static uint32_t lost_valid_line_time = 0;
 
@@ -104,6 +104,21 @@ void Control_Loop_1kHz(void)
   if (current_line_color != LINE_BLACK)
   {
     line_detected = 0; // Force không detect
+  }
+
+  /* ULTIMATE SAFETY: HARD CHECK cho giấy trắng */
+  uint32_t avg_all = 0;
+  for (int i = 0; i < N_CH; i++)
+  {
+    avg_all += snap[i];
+  }
+  avg_all /= N_CH;
+
+  // Nếu trung bình sensors > 2000 (giấy trắng) thì FORCE STOP
+  if (avg_all > 2000)
+  {
+    line_detected = 0;
+    current_line_color = LINE_NONE;
   }
 
   /* ~8s đầu tự hiệu chuẩn - tăng thời gian để hiệu chuẩn tốt hơn */
@@ -260,6 +275,22 @@ void Control_Loop_1kHz(void)
 
   /* SAFETY CHECK CUỐI CÙNG: Force stop nếu không có line hợp lệ */
   if (!Button_RunEnabled() || (!line_detected && !motor_test_mode))
+  {
+    c1_now = c2_now = 0;
+  }
+
+  /* MEGA KILL SWITCH: HARD STOP nếu không phải line đen */
+  if (current_line_color != LINE_BLACK)
+  {
+    c1_now = c2_now = 0;
+  }
+
+  /* ULTIMATE KILL SWITCH: HARD STOP nếu ở test mode nhưng không có line */
+  if (motor_test_mode && current_line_color != LINE_BLACK)
+  {
+    c1_now = c2_now = 0;
+    motor_test_mode = 0; // Disable test mode
+  }
   {
     c1_now = c2_now = 0;
   }

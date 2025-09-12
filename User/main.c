@@ -24,14 +24,19 @@ int main(void)
 
   /* CẤU HÌNH ROBOT CHỈ CHẠY VỚI LINE ĐEN */
   Control_SetRequiredLineColor(LINE_BLACK); // CHỈ CHẤP NHẬN LINE ĐEN THÔI
+  Control_SetMotorTestMode(0);              // FORCE DISABLE TEST MODE
 
-  /* CHẾ ĐỘ TEST MOTOR: Nhấn giữ nút trong 3 giây khi khởi động */
+  /* CHẾ ĐỘ TEST MOTOR: Nhấn giữ nút trong 3 giây khi khởi động + CÓ LINE ĐEN */
   uint32_t start_time = 0;
   while (start_time < 3000)
   {
     if (BTN_IS_PRESSED())
     {
-      Control_SetMotorTestMode(1); // Bật chế độ test motor
+      // CHỈ cho phép test mode nếu có line đen
+      if (Control_GetLineDetected() && Control_GetLineColor() == LINE_BLACK)
+      {
+        Control_SetMotorTestMode(1); // Bật chế độ test motor
+      }
       break;
     }
     start_time++;
