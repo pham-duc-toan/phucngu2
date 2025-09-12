@@ -2,6 +2,7 @@
 #include "pid.h"
 #include "adc_dma.h"
 #include "line_sensors.h"
+#include "line_params.h" // File tham số để dễ tuning
 #include "motor_tb6612.h"
 #include "button.h"
 
@@ -85,6 +86,29 @@ void Control_Loop_1kHz(void)
   }
   t++;
 
+  // *** LOGIC KIỂM TRA LINE CHẶT CHẼ - ĐÂY LÀ CHÌA KHÓA ***
+  // Update line detection status dựa vào nhiều tiêu chí
+  line_detected = debug_info.is_valid;
+
+  // THÊM KIỂM TRA KHẮT KHE: Không có line nếu contrast quá thấp
+  if (debug_info.contrast < MIN_CONTRAST_PARAM) // Sử dụng tham số từ file
+  {
+    line_detected = 0;
+  }
+
+  // THÊM KIỂM TRA: Không có line nếu tất cả sensor đều cao (nền trắng)
+  if (debug_info.avg_all > MAX_AVG_WHITE_PARAM) // Sử dụng tham số từ file
+  {
+    line_detected = 0;
+  }
+
+  // KIỂM TRA CUỐI CÙNG: Tính error và nếu = 0 thì chắc chắn không có line
+  int test_error = LineSensors_ComputeError(snap);
+  if (test_error == 0)
+  {
+    line_detected = 0;
+  }
+
   if (!Button_RunEnabled())
   {
     c1_tg = c2_tg = 0;
@@ -99,7 +123,15 @@ void Control_Loop_1kHz(void)
   }
   else
   {
-    // SIMPLE LINE FOLLOWING logic - theo code gốc đạt giải
+    // *** KIỂM TRA LINE TRƯỚC KHI CHO PHÉP CHẠY ***
+    if (!line_detected)
+    {
+      // KHÔNG CÓ LINE HỢP LỆ - DỪNG NGAY
+      c1_tg = c2_tg = 0;
+      return; // Thoát khỏi function, không thực hiện PID
+    }
+
+    // SIMPLE LINE FOLLOWING logic - chỉ chạy khi có line hợp lệ
     // Tính error từ sensor data (function này có built-in lost line handling)
     int e = LineSensors_ComputeError(snap);
 

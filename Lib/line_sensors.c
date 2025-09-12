@@ -1,4 +1,5 @@
 #include "line_sensors.h"
+#include "line_params.h" // File tham số để dễ tuning
 
 static uint16_t s_min[N_CH], s_max[N_CH];
 static int32_t lastError = 0;
@@ -30,16 +31,15 @@ int LineSensors_CalibQuality(void)
   int good_channels = 0;
   for (int i = 0; i < N_CH; i++)
   {
-    if ((s_max[i] - s_min[i]) > 500)
-      good_channels++; // Ng??ng ch?nh l?ch t?i thi?u
+    if ((s_max[i] - s_min[i]) > MIN_CALIB_DIFF_PARAM) // Sử dụng tham số từ file
+      good_channels++;                                // Ng??ng ch?nh l?ch t?i thi?u
   }
   return (good_channels >= (N_CH - 2)); // Ch?p nh?n n?u ?t nh?t 6/8 sensor t?t
 }
 
-/* 15% của 8000 - ngưỡng để phát hiện line - theo code gốc đạt giải */
-#define VSUM_THRESH 1200
-/* Ngưỡng để phát hiện line yếu */
-#define VSUM_WEAK_THRESH 800
+/* Sử dụng tham số từ file line_params.h để dễ tuning */
+#define VSUM_THRESH VSUM_THRESH_PARAM           // = 1800
+#define VSUM_WEAK_THRESH VSUM_WEAK_THRESH_PARAM // = 1000
 
 static uint32_t lostLineCounter = 0;
 
@@ -115,7 +115,7 @@ int LineSensors_ComputeError(const uint16_t *snap)
 
   if (vsum > VSUM_THRESH)
   {
-    // Ph?t hi?n line r? r?ng
+    // Phát hiện line rõ ràng
     lostLineCounter = 0;
     int32_t pos = wsum / vsum;
     int32_t e = pos - center;
@@ -124,28 +124,27 @@ int LineSensors_ComputeError(const uint16_t *snap)
   }
   else if (vsum > VSUM_WEAK_THRESH)
   {
-    // Ph?t hi?n line y?u - gi?m h? s? ph?n h?i
+    // Phát hiện line yếu - giảm hệ số phản hồi
     lostLineCounter = 0;
     int32_t pos = wsum / vsum;
     int32_t e = pos - center;
     lastError = e;
-    return (int)(e * 0.7f); // Gi?m ?? nh?y khi line y?u
+    return (int)(e * 0.7f); // Giảm độ nhạy khi line yếu
   }
   else
   {
-    // M?t line ho?n to?n
+    // *** THAY ĐỔI: NGHIÊM KHẮC HƠN - KHÔNG TÌM LINE KHI KHÔNG CÓ ***
     lostLineCounter++;
-    if (lostLineCounter < 100)
-    {                                          // 100ms ?? th? l?i
-      return (lastError >= 0) ? +1500 : -1500; // Gi?m t?c ?? quay
-    }
-    else if (lostLineCounter < 500)
-    {                                          // 0.5s ti?p theo
-      return (lastError >= 0) ? +1800 : -1800; // T?ng d?n t?c ?? quay
+
+    // CHỈ cho phép tìm line trong thời gian rất ngắn
+    // CHỈ cho phép tìm line trong thời gian rất ngắn
+    if (lostLineCounter < LOST_LINE_TIME_MS_PARAM) // Sử dụng tham số từ file
+    {
+      return (lastError >= 0) ? +SEARCH_SPEED_PARAM : -SEARCH_SPEED_PARAM; // Sử dụng tham số từ file
     }
     else
     {
-      return 0; // D?ng l?i sau 0.5s kh?ng t?m th?y line
+      return 0; // Dừng ngay sau thời gian quy định - NGHIÊM KHẮC
     }
   }
 }
