@@ -459,6 +459,16 @@
               <FilePath>..\Lib\line_params.h</FilePath>
             </File>
             <File>
+              <FileName>system_state.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Lib\system_state.h</FilePath>
+            </File>
+            <File>
+              <FileName>system_state.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Lib\system_state.c</FilePath>
+            </File>
+            <File>
               <FileName>button.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Lib\button.c</FilePath>

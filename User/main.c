@@ -5,6 +5,7 @@
 #include "line_sensors.h"
 #include "control.h"
 #include "button.h"
+#include "system_state.h"
 
 int main(void)
 {
@@ -21,6 +22,12 @@ int main(void)
 
   LineSensors_CalibInit();
   Control_Init();
+
+  /* Khởi tạo SysTick timer - 1ms tick */
+  SysTick_Config(SystemCoreClock / 1000); // 1kHz tick
+
+  /* Khởi tạo state machine */
+  SystemState_Init();
 
   Control_SetMotorTestMode(0); // FORCE DISABLE TEST MODE
 
@@ -103,4 +110,10 @@ int main(void)
 
     __WFI();
   }
+}
+
+/* SysTick interrupt handler */
+void SysTick_Handler(void)
+{
+  SystemState_SysTickHandler();
 }
