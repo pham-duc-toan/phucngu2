@@ -187,17 +187,21 @@ void Control_Loop_1kHz(void)
       else
         BASE = LOW_SPEED;
 
-      c1_tg = BASE - (int)u;
-      c2_tg = BASE + (int)u;
+      // Calculate motor speeds with safe clamping
+      int temp_c1 = BASE - (int)u;
+      int temp_c2 = BASE + (int)u;
 
-      if (c1_tg < 0)
-        c1_tg = 0;
-      if (c2_tg < 0)
-        c2_tg = 0;
-      if (c1_tg > 4095)
-        c1_tg = 4095;
-      if (c2_tg > 4095)
-        c2_tg = 4095;
+      if (temp_c1 < 0)
+        temp_c1 = 0;
+      if (temp_c2 < 0)
+        temp_c2 = 0;
+      if (temp_c1 > 4095)
+        temp_c1 = 4095;
+      if (temp_c2 > 4095)
+        temp_c2 = 4095;
+
+      c1_tg = (uint16_t)temp_c1;
+      c2_tg = (uint16_t)temp_c2;
     }
     break;
   }

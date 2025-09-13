@@ -3,6 +3,11 @@
 #include "line_sensors.h"
 #include "line_params.h"
 #include "motor_tb6612.h"
+#include "board.h"
+
+/* Motor constants */
+#define MOTOR_LEFT 0
+#define MOTOR_RIGHT 1
 
 /* ============================================================================
  * PRIVATE VARIABLES
@@ -55,10 +60,8 @@ void SystemState_Delay(uint32_t ms)
 
 void SystemState_ProcessButton(void)
 {
-  uint8_t button_current = Button_GetState();
-  uint32_t current_time = SystemState_GetTick();
-
-  // Phát hiện nhấn nút
+  uint8_t button_current = BTN_IS_PRESSED();
+  uint32_t current_time = SystemState_GetTick(); // Phát hiện nhấn nút
   if (button_current && !button_was_pressed)
   {
     // Bắt đầu nhấn
@@ -107,8 +110,7 @@ void SystemState_Init(void)
   systick_counter = 0;
 
   // Khởi tạo motor ở trạng thái dừng
-  Motor_SetSpeed(MOTOR_LEFT, 0);
-  Motor_SetSpeed(MOTOR_RIGHT, 0);
+  Motor_WritePWM(0, 0);
 
   // Khởi tạo sensors
   LineSensors_CalibInit();
@@ -147,8 +149,7 @@ void SystemState_Update(void)
   case STATE_CALIBRATION:
     // Quét và học vạch line trong 3-8s
     // Motor KHÔNG quay, chỉ quét sensor
-    Motor_SetSpeed(MOTOR_LEFT, 0);
-    Motor_SetSpeed(MOTOR_RIGHT, 0);
+    Motor_WritePWM(0, 0);
 
     // Cập nhật calibration
     // (sensor data sẽ được xử lý trong main loop)
@@ -181,8 +182,7 @@ void SystemState_Update(void)
 
   case STATE_STOPPED:
     // Dừng motor
-    Motor_SetSpeed(MOTOR_LEFT, 0);
-    Motor_SetSpeed(MOTOR_RIGHT, 0);
+    Motor_WritePWM(0, 0);
 
     // Quay lại STANDBY nếu nhấn giữ 3s
     if (button_event == BUTTON_LONG_3S)
@@ -224,8 +224,7 @@ void SystemState_ForceStop(void)
 {
   current_state = STATE_STOPPED;
   state_enter_time = SystemState_GetTick();
-  Motor_SetSpeed(MOTOR_LEFT, 0);
-  Motor_SetSpeed(MOTOR_RIGHT, 0);
+  Motor_WritePWM(0, 0);
 }
 
 float SystemState_GetSpeedFactor(void)

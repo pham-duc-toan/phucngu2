@@ -72,7 +72,7 @@ SensorDebug_t LineSensors_GetDebugInfo(const uint16_t *snap)
   debug.contrast = debug.max_val - debug.min_val;
 
   // Count active sensors (dựa vào VSUM thay vì color detection)
-  int32_t wsum = 0, vsum = 0;
+  int32_t vsum = 0;
   for (int i = 0; i < N_CH; i++)
   {
     uint16_t r = snap[i];
