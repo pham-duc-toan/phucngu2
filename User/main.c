@@ -1,5 +1,5 @@
-#include "board.h"
-#include "adc_polling.h" // Thay thế adc_dma
+#include "board.h"       // Phải include đầu tiên
+#include "adc_polling.h" // ADC polling module
 #include "timers.h"
 #include "motor_tb6612.h"
 #include "line_sensors.h"
@@ -11,12 +11,12 @@ int main(void)
 {
   Clocks_EnableAll();
 
-  Sensors_GPIO_InitAnalog(); // PA0..PA7
-  Motor_InitGPIO_PWM();      // PB8..PB12 + STBY
-  Button_Init();             // PB13
+  // Khởi tạo GPIO và peripherals
+  Motor_InitGPIO_PWM(); // PB8..PB12 + STBY
+  Button_Init();        // PB13
 
   TIM4_PWM_Init();     // PWM 18 kHz
-  ADC_Polling_Init();  // ADC polling thay vì DMA
+  ADC_Polling_Init();  // ADC polling (bao gồm cả GPIO PA0-PA7)
   TIM3_Trigger_Init(); // TRGO 2 kHz (để trigger 1kHz control loop)
 
   LineSensors_CalibInit();
