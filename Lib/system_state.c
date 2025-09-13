@@ -23,13 +23,16 @@ static volatile uint32_t systick_counter = 0;
 static uint32_t button_press_start = 0;
 static uint8_t button_was_pressed = 0;
 static ButtonEvent_t last_button_event = BUTTON_NONE;
+static uint32_t last_button_release_time = 0;
+static uint8_t button_click_count = 0;
+static uint32_t double_click_timeout = 500; // 500ms cho double click
 
 /* State timing */
 static uint32_t state_enter_time = 0;
-static uint32_t calibration_start_time = 0;
 
-/* Speed reduction factor */
-static const float SPEED_FACTOR = 0.6f; // 60% tốc độ
+/* Speed factor - tăng lên 3000 */
+static const float SPEED_FACTOR = 1.0f;  // 100% tốc độ
+static const uint16_t BASE_SPEED = 3000; // Tốc độ cơ bản 3000
 
 /* ============================================================================
  * SYSTICK TIMER FUNCTIONS
@@ -61,7 +64,9 @@ void SystemState_Delay(uint32_t ms)
 void SystemState_ProcessButton(void)
 {
   uint8_t button_current = BTN_IS_PRESSED();
-  uint32_t current_time = SystemState_GetTick(); // Phát hiện nhấn nút
+  uint32_t current_time = SystemState_GetTick();
+
+  // Phát hiện nhấn nút
   if (button_current && !button_was_pressed)
   {
     // Bắt đầu nhấn
@@ -77,18 +82,44 @@ void SystemState_ProcessButton(void)
     button_was_pressed = 0;
 
     // Phân loại loại nhấn
-    if (press_duration >= 3000) // >= 3s
+    if (press_duration >= 1000) // >= 1s = long hold (STOP)
     {
-      last_button_event = BUTTON_LONG_3S;
+      last_button_event = BUTTON_LONG_HOLD;
+      button_click_count = 0; // Reset click count
     }
-    else if (press_duration >= 1000 && press_duration < 2500) // 1-2.5s
+    else if (press_duration < 1000) // < 1s = short press
     {
-      last_button_event = BUTTON_LONG_STOP;
+      // Xử lý single/double click
+      if (button_click_count == 0)
+      {
+        // First click
+        button_click_count = 1;
+        last_button_release_time = current_time;
+      }
+      else if (button_click_count == 1)
+      {
+        // Second click
+        if ((current_time - last_button_release_time) < double_click_timeout)
+        {
+          last_button_event = BUTTON_DOUBLE;
+          button_click_count = 0;
+        }
+        else
+        {
+          // Too slow, treat as new first click
+          button_click_count = 1;
+          last_button_release_time = current_time;
+        }
+      }
     }
-    else if (press_duration < 1000) // < 1s
-    {
-      last_button_event = BUTTON_SHORT;
-    }
+  }
+
+  // Timeout cho single click
+  if (button_click_count == 1 &&
+      (current_time - last_button_release_time) >= double_click_timeout)
+  {
+    last_button_event = BUTTON_SINGLE;
+    button_click_count = 0;
   }
 }
 
@@ -138,45 +169,48 @@ void SystemState_Update(void)
     break;
 
   case STATE_STANDBY:
-    // Đợi nhấn giữ 3s để bắt đầu
-    if (button_event == BUTTON_LONG_3S)
+    // Nhấn 1 lần: vào SCAN mode
+    if (button_event == BUTTON_SINGLE)
     {
-      next_state = STATE_CALIBRATION;
-      calibration_start_time = current_time;
+      next_state = STATE_SCAN;
     }
-    break;
-
-  case STATE_CALIBRATION:
-    // Quét và học vạch line trong 3-8s
-    // Motor KHÔNG quay, chỉ quét sensor
-    Motor_WritePWM(0, 0);
-
-    // Cập nhật calibration
-    // (sensor data sẽ được xử lý trong main loop)
-
-    // Chuyển sang RUNNING nếu:
-    // - Nhấn nhẹ (cho phép chuyển sớm)
-    // - Hoặc đã đủ 8s
-    if (button_event == BUTTON_SHORT || state_time >= 8000)
+    // Nhấn 2 lần: vào RUN mode trực tiếp
+    else if (button_event == BUTTON_DOUBLE)
     {
       next_state = STATE_RUNNING;
     }
+    break;
 
-    // Dừng nếu nhấn giữ
-    if (button_event == BUTTON_LONG_STOP)
+  case STATE_SCAN:
+    // Quét line, motor KHÔNG chạy
+    Motor_WritePWM(0, 0);
+
+    // Nhấn 1 lần: tiếp tục SCAN
+    // Nhấn 2 lần: chuyển sang RUN
+    if (button_event == BUTTON_DOUBLE)
+    {
+      next_state = STATE_RUNNING;
+    }
+    // Nhấn giữ: dừng
+    else if (button_event == BUTTON_LONG_HOLD)
     {
       next_state = STATE_STOPPED;
     }
     break;
 
   case STATE_RUNNING:
-    // Robot chạy theo line với tốc độ 60%
+    // Robot chạy theo line
     // (Motor control sẽ được xử lý trong main loop)
 
-    // Dừng nếu nhấn giữ 1-2s
-    if (button_event == BUTTON_LONG_STOP)
+    // Nhấn giữ: dừng
+    if (button_event == BUTTON_LONG_HOLD)
     {
       next_state = STATE_STOPPED;
+    }
+    // Nhấn 1 lần: về SCAN mode
+    else if (button_event == BUTTON_SINGLE)
+    {
+      next_state = STATE_SCAN;
     }
     break;
 
@@ -184,10 +218,15 @@ void SystemState_Update(void)
     // Dừng motor
     Motor_WritePWM(0, 0);
 
-    // Quay lại STANDBY nếu nhấn giữ 3s
-    if (button_event == BUTTON_LONG_3S)
+    // Nhấn 1 lần: vào SCAN
+    if (button_event == BUTTON_SINGLE)
     {
-      next_state = STATE_STANDBY;
+      next_state = STATE_SCAN;
+    }
+    // Nhấn 2 lần: vào RUN
+    else if (button_event == BUTTON_DOUBLE)
+    {
+      next_state = STATE_RUNNING;
     }
     break;
   }
@@ -215,9 +254,9 @@ uint8_t SystemState_IsRunning(void)
   return (current_state == STATE_RUNNING);
 }
 
-uint8_t SystemState_IsCalibrating(void)
+uint8_t SystemState_IsScanning(void)
 {
-  return (current_state == STATE_CALIBRATION);
+  return (current_state == STATE_SCAN);
 }
 
 void SystemState_ForceStop(void)
@@ -232,6 +271,11 @@ float SystemState_GetSpeedFactor(void)
   return SPEED_FACTOR;
 }
 
+uint16_t SystemState_GetBaseSpeed(void)
+{
+  return BASE_SPEED;
+}
+
 /* ============================================================================
  * DEBUG FUNCTIONS
  * ============================================================================ */
@@ -244,8 +288,8 @@ const char *SystemState_GetStateName(void)
     return "INIT";
   case STATE_STANDBY:
     return "STANDBY";
-  case STATE_CALIBRATION:
-    return "CALIBRATION";
+  case STATE_SCAN:
+    return "SCAN";
   case STATE_RUNNING:
     return "RUNNING";
   case STATE_STOPPED:

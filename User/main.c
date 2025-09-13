@@ -1,5 +1,5 @@
 #include "board.h"
-#include "adc_dma.h"
+#include "adc_polling.h" // Thay thế adc_dma
 #include "timers.h"
 #include "motor_tb6612.h"
 #include "line_sensors.h"
@@ -16,9 +16,8 @@ int main(void)
   Button_Init();             // PB13
 
   TIM4_PWM_Init();     // PWM 18 kHz
-  ADC_DMA_Init();      // ADC + DMA
-  TIM3_Trigger_Init(); // TRGO 2 kHz
-  ADC_DMA_Start();
+  ADC_Polling_Init();  // ADC polling thay vì DMA
+  TIM3_Trigger_Init(); // TRGO 2 kHz (để trigger 1kHz control loop)
 
   LineSensors_CalibInit();
   Control_Init();

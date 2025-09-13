@@ -1,6 +1,6 @@
 #include "control.h"
 #include "pid.h"
-#include "adc_dma.h"
+#include "adc_polling.h" // Thay thế adc_dma
 #include "line_sensors.h"
 #include "line_params.h" // File tham số để dễ tuning
 #include "motor_tb6612.h"
@@ -66,10 +66,9 @@ void Control_Loop_1kHz(void)
   /* Update state machine */
   SystemState_Update();
 
-  /* Snapshot ADC */
+  /* Snapshot ADC - đọc trực tiếp thay vì dùng DMA */
   uint16_t snap[N_CH];
-  for (int i = 0; i < N_CH; i++)
-    snap[i] = adcBuf[i];
+  ADC_ReadAllChannels(snap);
 
   /* DEBUG: Copy data cho debug */
   debug_counter++;
@@ -92,8 +91,8 @@ void Control_Loop_1kHz(void)
     PID_Init(&pid, pid.Kp, pid.Ki, pid.Kd, pid.Ts, pid.d_alpha, pid.u_min, pid.u_max);
     break;
 
-  case STATE_CALIBRATION:
-    // Chế độ calibration - motor dừng, chỉ cập nhật sensor calibration
+  case STATE_SCAN:
+    // Chế độ scan - motor dừng, chỉ cập nhật sensor calibration
     c1_tg = c2_tg = 0;
     c1_now = c2_now = 0;
 
@@ -102,13 +101,13 @@ void Control_Loop_1kHz(void)
     break;
 
   case STATE_RUNNING:
-    // Chế độ chạy - xử lý line following với tốc độ 60%
+    // Chế độ chạy - xử lý line following với tốc độ 3000
 
     if (motor_test_mode)
     {
-      /* CHẾ ĐỘ TEST MOTOR - chạy thẳng với tốc độ giảm */
-      float speed_factor = SystemState_GetSpeedFactor();
-      c1_tg = c2_tg = (uint16_t)(3000 * speed_factor);
+      /* CHẾ ĐỘ TEST MOTOR - chạy thẳng với tốc độ 3000 */
+      uint16_t base_speed = SystemState_GetBaseSpeed();
+      c1_tg = c2_tg = base_speed;
     }
     else
     {
@@ -148,80 +147,77 @@ void Control_Loop_1kHz(void)
       if (e == 0)
       {
         c1_tg = c2_tg = 0;
-        return;
+        float u = PID_Update(&pid, (float)e);
+        uint16_t base_speed = SystemState_GetBaseSpeed(); // 3000
+
+        /* BASE điều chỉnh với tốc độ 3000 */
+        int BASE, LOW_SPEED, MED_SPEED, HIGH_SPEED, ULTRA_HIGH_SPEED;
+
+        if (high_speed_mode)
+        {
+          // Chế độ tốc độ cao với base 3000
+          BASE = base_speed;                   // 3000
+          ULTRA_HIGH_SPEED = base_speed + 800; // 3800
+          HIGH_SPEED = base_speed + 400;       // 3400
+          MED_SPEED = base_speed;              // 3000
+          LOW_SPEED = base_speed - 600;        // 2400
+        }
+        else
+        {
+          // Chế độ tốc độ bình thường
+          BASE = base_speed - 1200;            // 1800
+          ULTRA_HIGH_SPEED = base_speed - 800; // 2200
+          HIGH_SPEED = base_speed - 1000;      // 2000
+          MED_SPEED = base_speed - 1400;       // 1600
+          LOW_SPEED = base_speed - 1800;       // 1200
+        }
+
+        int ae = (e < 0) ? -e : e;
+
+        if (ae < 500)
+          BASE = ULTRA_HIGH_SPEED;
+        else if (ae < 1000)
+          BASE = HIGH_SPEED;
+        else if (ae < 2000)
+          BASE = MED_SPEED;
+        else
+          BASE = LOW_SPEED;
+
+        // Calculate motor speeds with safe clamping
+        int temp_c1 = BASE - (int)u;
+        int temp_c2 = BASE + (int)u;
+
+        if (temp_c1 < 0)
+          temp_c1 = 0;
+        if (temp_c2 < 0)
+          temp_c2 = 0;
+        if (temp_c1 > 4095)
+          temp_c1 = 4095;
+        if (temp_c2 > 4095)
+          temp_c2 = 4095;
+
+        c1_tg = (uint16_t)temp_c1;
+        c2_tg = (uint16_t)temp_c2;
       }
-
-      float u = PID_Update(&pid, (float)e);
-      float speed_factor = SystemState_GetSpeedFactor(); // 0.6
-
-      /* BASE điều chỉnh với tốc độ giảm 60% */
-      int BASE, LOW_SPEED, MED_SPEED, HIGH_SPEED, ULTRA_HIGH_SPEED;
-
-      if (high_speed_mode)
-      {
-        // Chế độ tốc độ cao - giảm 60%
-        BASE = (int)(3400 * speed_factor);             // ~2040
-        ULTRA_HIGH_SPEED = (int)(3800 * speed_factor); // ~2280
-        HIGH_SPEED = (int)(3600 * speed_factor);       // ~2160
-        MED_SPEED = (int)(3000 * speed_factor);        // ~1800
-        LOW_SPEED = (int)(2400 * speed_factor);        // ~1440
-      }
-      else
-      {
-        // Chế độ tốc độ bình thường - giảm 60%
-        BASE = (int)(1800 * speed_factor);             // ~1080
-        ULTRA_HIGH_SPEED = (int)(2200 * speed_factor); // ~1320
-        HIGH_SPEED = (int)(2000 * speed_factor);       // ~1200
-        MED_SPEED = (int)(1600 * speed_factor);        // ~960
-        LOW_SPEED = (int)(1200 * speed_factor);        // ~720
-      }
-
-      int ae = (e < 0) ? -e : e;
-
-      if (ae < 500)
-        BASE = ULTRA_HIGH_SPEED;
-      else if (ae < 1000)
-        BASE = HIGH_SPEED;
-      else if (ae < 2000)
-        BASE = MED_SPEED;
-      else
-        BASE = LOW_SPEED;
-
-      // Calculate motor speeds with safe clamping
-      int temp_c1 = BASE - (int)u;
-      int temp_c2 = BASE + (int)u;
-
-      if (temp_c1 < 0)
-        temp_c1 = 0;
-      if (temp_c2 < 0)
-        temp_c2 = 0;
-      if (temp_c1 > 4095)
-        temp_c1 = 4095;
-      if (temp_c2 > 4095)
-        temp_c2 = 4095;
-
-      c1_tg = (uint16_t)temp_c1;
-      c2_tg = (uint16_t)temp_c2;
+      break;
     }
-    break;
+
+    /* Slew-rate về target */
+    uint16_t CCR_SLEW_CURRENT = CCR_SLEW_MAX;
+    int d1 = (int)c1_tg - (int)c1_now;
+    if (d1 > (int)CCR_SLEW_CURRENT)
+      d1 = CCR_SLEW_CURRENT;
+    if (d1 < -(int)CCR_SLEW_CURRENT)
+      d1 = -(int)CCR_SLEW_CURRENT;
+    c1_now = (uint16_t)((int)c1_now + d1);
+
+    int d2 = (int)c2_tg - (int)c2_now;
+    if (d2 > (int)CCR_SLEW_CURRENT)
+      d2 = CCR_SLEW_CURRENT;
+    if (d2 < -(int)CCR_SLEW_CURRENT)
+      d2 = -(int)CCR_SLEW_CURRENT;
+    c2_now = (uint16_t)((int)c2_now + d2);
+
+    /* Ghi PWM - sử dụng calibrated để cân bằng motor */
+    Motor_WritePWM_Calibrated(c1_now, c2_now);
   }
-
-  /* Slew-rate về target */
-  uint16_t CCR_SLEW_CURRENT = CCR_SLEW_MAX;
-  int d1 = (int)c1_tg - (int)c1_now;
-  if (d1 > (int)CCR_SLEW_CURRENT)
-    d1 = CCR_SLEW_CURRENT;
-  if (d1 < -(int)CCR_SLEW_CURRENT)
-    d1 = -(int)CCR_SLEW_CURRENT;
-  c1_now = (uint16_t)((int)c1_now + d1);
-
-  int d2 = (int)c2_tg - (int)c2_now;
-  if (d2 > (int)CCR_SLEW_CURRENT)
-    d2 = CCR_SLEW_CURRENT;
-  if (d2 < -(int)CCR_SLEW_CURRENT)
-    d2 = -(int)CCR_SLEW_CURRENT;
-  c2_now = (uint16_t)((int)c2_now + d2);
-
-  /* Ghi PWM - sử dụng calibrated để cân bằng motor */
-  Motor_WritePWM_Calibrated(c1_now, c2_now);
-}

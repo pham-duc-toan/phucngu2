@@ -478,6 +478,16 @@
               <FileType>5</FileType>
               <FilePath>..\Lib\button.h</FilePath>
             </File>
+            <File>
+              <FileName>adc_polling.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Lib\adc_polling.h</FilePath>
+            </File>
+            <File>
+              <FileName>adc_polling.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Lib\adc_polling.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

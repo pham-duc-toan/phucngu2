@@ -9,19 +9,19 @@
 
 typedef enum
 {
-  STATE_INIT = 0,    // Khởi tạo hệ thống
-  STATE_STANDBY,     // Chờ nhấn nút để bắt đầu
-  STATE_CALIBRATION, // Quét và học vạch line (3-8s)
-  STATE_RUNNING,     // Chạy theo line
-  STATE_STOPPED      // Dừng hệ thống
+  STATE_INIT = 0, // Khởi tạo hệ thống
+  STATE_STANDBY,  // Chờ nhấn nút để bắt đầu
+  STATE_SCAN,     // Quét line (motor dừng)
+  STATE_RUNNING,  // Chạy theo line
+  STATE_STOPPED   // Dừng hệ thống
 } SystemState_t;
 
 typedef enum
 {
   BUTTON_NONE = 0, // Không nhấn
-  BUTTON_SHORT,    // Nhấn nhẹ (<1s)
-  BUTTON_LONG_3S,  // Nhấn giữ 3s (khởi động)
-  BUTTON_LONG_STOP // Nhấn giữ 1-2s (dừng)
+  BUTTON_SINGLE,   // Nhấn 1 lần (vào SCAN mode)
+  BUTTON_DOUBLE,   // Nhấn 2 lần (vào RUN mode)
+  BUTTON_LONG_HOLD // Nhấn giữ (STOP)
 } ButtonEvent_t;
 
 /* ============================================================================
@@ -32,9 +32,10 @@ void SystemState_Init(void);
 void SystemState_Update(void);
 SystemState_t SystemState_GetCurrent(void);
 uint8_t SystemState_IsRunning(void);
-uint8_t SystemState_IsCalibrating(void);
+uint8_t SystemState_IsScanning(void);
 void SystemState_ForceStop(void);
 float SystemState_GetSpeedFactor(void);
+uint16_t SystemState_GetBaseSpeed(void);
 
 /* SysTick timer functions */
 void SystemState_SysTickHandler(void);
